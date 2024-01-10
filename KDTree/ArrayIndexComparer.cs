@@ -3,8 +3,6 @@
     internal class ArrayIndexComparer<T>(int index) : IComparer<T[]>
         where T : IComparable<T>
     {
-        static readonly Dictionary<int, ArrayIndexComparer<T>> Defaut = new();
-
         int IComparer<T[]>.Compare(T[]? x, T[]? y)
         {
             if (x == null && y == null) return 0;

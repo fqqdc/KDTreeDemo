@@ -12,9 +12,9 @@ namespace KDTree
     public class KDTree<T>
         where T : struct, INumber<T>
     {
-        public event Action<KDTreeNode<T>>? CalcNodeDistance;
-        public event Action<KDTreeNode<T>>? ChangedBestNode;
-        public event Action<T[], KDTreeNode<T>, T>? BranchChecked;
+        public event Action<KDTreeNode<T>>? NodeVisited;
+        public event Action<KDTreeNode<T>>? BestNodeChanged;
+        public event Action<T[], KDTreeNode<T>, double>? SwitchedSiblingBranch;
 
 
         public KDTree(in IEnumerable<IEnumerable<T>> vectors, int numberAxis, T zeroValue)
@@ -33,34 +33,32 @@ namespace KDTree
         public KDTreeNode<T> Root { get; init; }
         private readonly int _AxisNumber;
 
-        public T[] FindNearest(in T[] center)
+        public KDTreeNode<T> FindNearestRecursion(in T[] value)
         {
-            if (center.Length != _AxisNumber)
-                throw new ArgumentOutOfRangeException(nameof(center), $"Length of {nameof(center)} must equal {_AxisNumber}.");
+            if (value.Length != _AxisNumber)
+                throw new ArgumentOutOfRangeException(nameof(value), $"Length of {nameof(value)} must equal {_AxisNumber}.");
 
-            CalcNodeDistance?.Invoke(Root);
+            var bestDistance = double.MaxValue;
+            KDTreeNode<T>? bestNode = null;
 
-            var bestDistance = CalcDistanceSquare(center, Root.Value);
-            var bestNode = Root;
+            FindNearestRecursion(value, Root, ref bestDistance, ref bestNode);
 
-            ChangedBestNode?.Invoke(bestNode);
-
-            FindNearestRecursion(center, Root, ref bestDistance, ref bestNode);
-            return [.. bestNode.Value];
+            Debug.Assert(bestNode != null);
+            return bestNode;
         }
 
-        private void FindNearestRecursion(in T[] center, in KDTreeNode<T>? currentNode, ref T bestDistance, ref KDTreeNode<T> bestNode)
+        private void FindNearestRecursion(in T[] center, in KDTreeNode<T> currentNode, ref double bestDistance, ref KDTreeNode<T>? bestNode)
         {
             Debug.Assert(currentNode != null);
 
             var distance = CalcDistanceSquare(center, currentNode.Value);
-            CalcNodeDistance?.Invoke(currentNode);
+            NodeVisited?.Invoke(currentNode);
 
             if (distance < bestDistance)
             {
                 bestDistance = distance;
                 bestNode = currentNode;
-                ChangedBestNode?.Invoke(bestNode);
+                BestNodeChanged?.Invoke(bestNode);
             }
 
             KDTreeNode<T>? node0;
@@ -82,32 +80,102 @@ namespace KDTree
             }
 
             if (node1 != null)
-            {                
-                var axisDistance = KDTree<T>.CalcAxisDistanceSquare(center, currentNode.Value, currentNode.Axis);
+            {
+                var axisDistance = KDTree<T>.CalcDistanceSquareByAxis(center, currentNode.Value, currentNode.Axis);
 
                 if (axisDistance < bestDistance)
                 {
-                    Debug.WriteLine("axisDistance < bestDistance");
-                    BranchChecked?.Invoke(center, currentNode, bestDistance);
-
+                    SwitchedSiblingBranch?.Invoke(center, currentNode, bestDistance);
                     FindNearestRecursion(center, node1, ref bestDistance, ref bestNode);
                 }
             }
         }
 
-        private static T CalcAxisDistanceSquare(T[] x, T[] y, int axis)
+        public KDTreeNode<T> FindNearest(in T[] value)
         {
-            var dis = x[axis] - y[axis];
+            if (value.Length != _AxisNumber)
+                throw new ArgumentOutOfRangeException(nameof(value), $"Length of {nameof(value)} must equal {_AxisNumber}.");
+
+            var bestDistance = double.MaxValue;
+            KDTreeNode<T>? bestNode = null;
+            HashSet<KDTreeNode<T>> visited = [];
+
+            var node = KDTree<T>.FindLeafByAsix(Root, value);
+            while (node != null)
+            {
+                var distance = CalcDistanceSquare(value, node.Value);
+                visited.Add(node);
+                NodeVisited?.Invoke(node);
+
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestNode = node;
+                    BestNodeChanged?.Invoke(bestNode);
+                }
+
+                if (node.Parent == null)
+                    break;
+
+                var siblingNode = node.Parent.Left != node ? node.Parent.Left : node.Parent.Right;
+
+                if (siblingNode != null && !visited.Contains(siblingNode))
+                {
+                    var axisDistance = KDTree<T>.CalcDistanceSquareByAxis(value, node.Parent.Value, node.Parent.Axis);
+                    if (axisDistance < bestDistance)
+                    {
+                        Debug.Assert(bestNode != null);
+                        SwitchedSiblingBranch?.Invoke(value, node.Parent, bestDistance);
+                        node = KDTree<T>.FindLeafByAsix(siblingNode, value);
+                        continue;
+                    }
+                }
+
+                node = node.Parent;
+            }
+
+            Debug.Assert(bestNode != null);
+            return bestNode;
+        }
+
+        /// <summary>
+        /// 寻找分支上的叶子，根据节点上的轴坐标来选择靠近目标的分支
+        /// </summary>
+        private static KDTreeNode<T> FindLeafByAsix(in KDTreeNode<T> root, T[] values)
+        {
+            var node = root;
+            while (true)
+            {
+                if (values[node.Axis] < node.Value[node.Axis])
+                {
+                    if (node.Left == null)
+                        break;
+                    node = node.Left;
+                }
+                else
+                {
+                    if (node.Right == null)
+                        break;
+                    node = node.Right;
+                }
+            }
+            return node;
+        }
+
+
+        private static double CalcDistanceSquareByAxis(T[] x, T[] y, int axis)
+        {
+            var dis = Convert.ToDouble(x[axis] - y[axis]);
 
             return dis * dis;
         }
 
-        private T CalcDistanceSquare(T[] x, T[] y)
+        private double CalcDistanceSquare(T[] x, T[] y)
         {
-            var distanceSquare = T.Zero;
+            var distanceSquare = 0.0;
             for (int indexAxis = 0; indexAxis < _AxisNumber; indexAxis++)
             {
-                var distanceAxis = x[indexAxis] - y[indexAxis];
+                var distanceAxis = Convert.ToDouble(x[indexAxis] - y[indexAxis]);
                 distanceSquare += distanceAxis * distanceAxis;
             }
 

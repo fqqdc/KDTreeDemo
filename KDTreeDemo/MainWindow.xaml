@@ -10,9 +10,13 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition />
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="200" />
         </Grid.RowDefinitions>
-        <Canvas x:Name="mainCanvas" Grid.Row="1" 
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Canvas x:Name="Canvas_Main" Grid.Row="1"
             Background="Transparent"
             MouseLeftButtonDown="MainCanvas_MouseLeftButtonDown">
         </Canvas>
@@ -22,6 +26,8 @@
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*" />
@@ -60,12 +66,12 @@
                 </StackPanel>
 
             </StackPanel>
-                
+
             <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Horizontal">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10 5">
                     <TextBlock Text="生成点数量："/>
                     <TextBox Text="100" x:Name="txtRndPointNumber" Width="30" HorizontalContentAlignment="Center" />
-                </StackPanel>                
+                </StackPanel>
             </StackPanel>
 
             <StackPanel Grid.Row="0" Grid.Column="3" Orientation="Horizontal">
@@ -79,6 +85,20 @@
                     </RadioButton>
                 </StackPanel>
             </StackPanel>
+
+            <StackPanel Grid.Row="0" Grid.Column="4" Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10 5">
+                    <TextBlock Text="算法："/>
+                    <RadioButton VerticalAlignment="Center" IsChecked="True" Checked="RadioButton_Checked_T2B">
+                        <TextBlock Text="从上到下" />
+                    </RadioButton>
+                    <RadioButton VerticalAlignment="Center" Checked="RadioButton_Checked_B2T">
+                        <TextBlock Text="从下到上" />
+                    </RadioButton>
+                </StackPanel>
+            </StackPanel>
         </Grid>
+        <StackPanel Grid.Row="2" x:Name="StackPanel_Tree">
+        </StackPanel>
     </Grid>
 </Window>

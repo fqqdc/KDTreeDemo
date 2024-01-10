@@ -12,6 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using System.Xml.Linq;
 using WPFArrows.Arrows;
 
@@ -38,16 +39,20 @@ namespace KDTreeDemo
         {
             ClearMouseLeftButtonDownElements();
 
-            _RandomPointElements.ForEach(e => mainCanvas.Children.Remove(e));
+            _RandomPointElements.ForEach(e => Canvas_Main.Children.Remove(e));
             _RandomPointElements.Clear();
             _RandomPoints.Clear();
             txtBuilderPoints.Text = "0";
 
-            _LineElements.ForEach(e => mainCanvas.Children.Remove(e));
+            _LineElements.ForEach(e => Canvas_Main.Children.Remove(e));
             _LineElements.Clear();
 
             txtTraversePoints.Text = "0";
             txtCheckedPoints.Text = "0";
+
+            StackPanel_Tree.Children.Clear();
+            _NodeTreeItems.Clear();
+            _ChangedNodeTreeItems.Clear();
         }
 
         const int PointNumberDefault = 100;
@@ -58,7 +63,7 @@ namespace KDTreeDemo
         KDTree<double>? _KDTree;
         readonly List<FrameworkElement> _LineElements = [];
 
-        static readonly Brush NormalPointBrush = Brushes.Black;
+        static readonly Brush NormalPointBrush = Brushes.Gray;
         static readonly Brush NearestBrush = Brushes.DarkGreen;
         static readonly Brush MouseHitBrush = Brushes.Blue;
         static readonly Brush TraversePointBrush = Brushes.Red;
@@ -77,16 +82,18 @@ namespace KDTreeDemo
         int _CheckedCount = 0;
         readonly HashSet<KDTreeNode<double>> _CheckedPoints = [];
         readonly List<FrameworkElement> _BranchCheckedElements = [];
+        readonly Dictionary<KDTreeNode<double>, Rectangle> _NodeTreeItems = [];
+        readonly HashSet<KDTreeNode<double>> _ChangedNodeTreeItems = [];
 
         //=======================
         // KDTree event
 
-        private void KDTree_AddTraversePoint(KDTreeNode<double> node)
+        private void KDTree_NodeVisited(KDTreeNode<double> node)
         {
             if (_TraversePoints.Contains(node))
                 return;
 
-            Debug.WriteLine($"Traverse:({_TraverseCount}){node}");
+            Debug.WriteLine($"NodeVisited:({_TraverseCount}){node}");
 
             _TraverseCount++;
             _TraversePoints.Add(node);
@@ -94,16 +101,19 @@ namespace KDTreeDemo
             var traversePoint = new Ellipse() { Width = 10, Height = 10, Fill = TraversePointBrush };
             Canvas.SetLeft(traversePoint, node.Value[0] - 5);
             Canvas.SetTop(traversePoint, node.Value[1] - 5);
-            mainCanvas.Children.Add(traversePoint);
+            Canvas_Main.Children.Add(traversePoint);
             _TraverseElements.Add(traversePoint);
+
+            _NodeTreeItems[node].Fill = TraversePointBrush;
+            _ChangedNodeTreeItems.Add(node);
         }
 
-        private void KDTree_AddCheckedPoint(KDTreeNode<double> node)
+        private void KDTree_BestNodeChanged(KDTreeNode<double> node)
         {
             if (_CheckedPoints.Contains(node))
                 return;
 
-            Debug.WriteLine($"Checked:({_CheckedCount}){node}");
+            Debug.WriteLine($"BestNodeChanged:({_CheckedCount}){node}");
 
             _CheckedCount++;
             _CheckedPoints.Add(node);
@@ -111,18 +121,21 @@ namespace KDTreeDemo
             var checkedPoint = new Ellipse() { Width = 10, Height = 10, Fill = CheckedPointBrush };
             Canvas.SetLeft(checkedPoint, node.Value[0] - 5);
             Canvas.SetTop(checkedPoint, node.Value[1] - 5);
-            mainCanvas.Children.Add(checkedPoint);
+            Canvas_Main.Children.Add(checkedPoint);
             _CheckedElements.Add(checkedPoint);
+
+            _NodeTreeItems[node].Fill = CheckedPointBrush;
+            _ChangedNodeTreeItems.Add(node);
         }
-        private void KDTree_BranchChecked(double[] center, KDTreeNode<double> minNode,double radiusQquared)
+        private void KDTree_SwitchedSiblingBranch(double[] center, KDTreeNode<double> midNode, double radiusQquared)
         {
-            Debug.WriteLine($"CheckBranch");
+            Debug.WriteLine($"SwitchedSiblingBranch");
 
             var radius = Math.Sqrt(radiusQquared);
             var branchCheck = new Ellipse() { Width = radius * 2, Height = radius * 2, Stroke = BranchCheckedBrush, StrokeThickness = 0.5 };
             Canvas.SetLeft(branchCheck, center[0] - radius);
             Canvas.SetTop(branchCheck, center[1] - radius);
-            mainCanvas.Children.Add(branchCheck);
+            Canvas_Main.Children.Add(branchCheck);
             _BranchCheckedElements.Add(branchCheck);
 
 
@@ -130,20 +143,20 @@ namespace KDTreeDemo
             Point endPoint;
 
 
-            if (minNode.Axis == 0)
+            if (midNode.Axis == 0)
             {
                 startPoint.X = center[0];
-                startPoint.Y = minNode.Value[1];
+                startPoint.Y = midNode.Value[1];
 
-                double sign = double.Sign(center[0] - minNode.Value[0]);
+                double sign = double.Sign(center[0] - midNode.Value[0]);
                 endPoint = startPoint with { X = startPoint.X - radius * sign };
             }
             else
             {
-                startPoint.X = minNode.Value[0];
+                startPoint.X = midNode.Value[0];
                 startPoint.Y = center[1];
 
-                double sign = double.Sign( center[1] - minNode.Value[1]);
+                double sign = double.Sign(center[1] - midNode.Value[1]);
                 endPoint = startPoint with { Y = startPoint.Y - radius * sign };
             }
             var radiueLine = new ArrowLine()
@@ -153,7 +166,7 @@ namespace KDTreeDemo
                 StrokeThickness = 1,
                 Stroke = BranchCheckedBrush,
             };
-            mainCanvas.Children.Add(radiueLine);
+            Canvas_Main.Children.Add(radiueLine);
             _BranchCheckedElements.Add(radiueLine);
         }
 
@@ -162,17 +175,23 @@ namespace KDTreeDemo
 
         private void BtnPointGenerator_Click(object sender, RoutedEventArgs e)
         {
+            ClearMainCanvas();
+
             if (!int.TryParse(txtRndPointNumber.Text, out _RandomPointNumber))
             {
                 _RandomPointNumber = PointNumberDefault;
             }
-            _RandomPointNumber = Math.Clamp(_RandomPointNumber, 10, 9999);
+
+            _RandomPointNumber = Math.Clamp(_RandomPointNumber, 1, 1023);
+
+            var n = (int)Math.Log2(_RandomPointNumber);
+            n = (int)Math.Pow(2, n + 1) - 1;
+
+            _RandomPointNumber = n;
             txtRndPointNumber.Text = _RandomPointNumber.ToString();
 
-            ClearMainCanvas();
-
-            double maxWidth = mainCanvas.ActualWidth - 20;
-            double maxHeight = mainCanvas.ActualHeight - 20;
+            double maxWidth = Canvas_Main.ActualWidth - 20;
+            double maxHeight = Canvas_Main.ActualHeight - 20;
 
             if (_RandomPointGenerationType == 0)
                 AddRandomPoints(maxWidth, maxHeight);
@@ -182,16 +201,43 @@ namespace KDTreeDemo
             txtBuilderPoints.Text = this._RandomPointNumber.ToString();
 
             _KDTree = new(_RandomPoints.ToArray(), 2, 0);
-            _KDTree.CalcNodeDistance += KDTree_AddTraversePoint;
-            _KDTree.ChangedBestNode += KDTree_AddCheckedPoint;
-            _KDTree.BranchChecked += KDTree_BranchChecked;
+            _KDTree.NodeVisited += KDTree_NodeVisited;
+            _KDTree.BestNodeChanged += KDTree_BestNodeChanged;
+            _KDTree.SwitchedSiblingBranch += KDTree_SwitchedSiblingBranch;
 
-            _LineElements.ForEach(e => mainCanvas.Children.Remove(e));
+            _LineElements.ForEach(e => Canvas_Main.Children.Remove(e));
             _LineElements.Clear();
 
-            Rect rect = new() { X = 0, Y = 0, Width = mainCanvas.ActualWidth, Height = mainCanvas.ActualHeight };
+            Rect rect = new() { X = 0, Y = 0, Width = Canvas_Main.ActualWidth, Height = Canvas_Main.ActualHeight };
             double lineThickness = Math.Ceiling(Math.Log2(this._RandomPointNumber)) * 0.5 + 0.5;
             DrawSplitLine(_KDTree.Root, rect, lineThickness);
+
+            GenerateTreeItems(_KDTree.Root, StackPanel_Tree);
+        }
+
+        private void GenerateTreeItems(KDTreeNode<double>? node, StackPanel vPanel)
+        {
+            if (node == null) return;
+
+            Rectangle rectangle = new() { Fill = NormalPointBrush, Height = 19, Margin = new(1, 1, 0, 0) };
+            _NodeTreeItems[node] = rectangle;
+            vPanel.Children.Add(rectangle);
+
+            var rowGrid = new Grid();
+            rowGrid.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+            rowGrid.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+
+
+            var vLeftPanel = new StackPanel() { Orientation = Orientation.Vertical };
+            GenerateTreeItems(node.Left, vLeftPanel);
+            rowGrid.Children.Add(vLeftPanel);
+
+            var vRightPanel = new StackPanel() { Orientation = Orientation.Vertical };
+            Grid.SetColumn(vRightPanel, 1);
+            GenerateTreeItems(node.Right, vRightPanel);
+            rowGrid.Children.Add(vRightPanel);
+
+            vPanel.Children.Add(rowGrid);
         }
 
         private void AddNormalPointElement(double x, double y)
@@ -200,7 +246,7 @@ namespace KDTreeDemo
             Ellipse ellipse = new() { Width = 10, Height = 10, Fill = NormalPointBrush };
             Canvas.SetLeft(ellipse, x - 5);
             Canvas.SetTop(ellipse, y - 5);
-            mainCanvas.Children.Add(ellipse);
+            Canvas_Main.Children.Add(ellipse);
             _RandomPointElements.Add(ellipse);
         }
 
@@ -212,9 +258,9 @@ namespace KDTreeDemo
             double midWidth = maxWidth * 0.5;
             double midHeight = maxHeight * 0.5;
 
-            for (double r = 0; r < Math.PI * 2; r += dRadian)
+            for (int i = 0; i < _RandomPointNumber; i++)
             {
-                var rad = r + dRadian * (rnd.NextDouble() * 0.05);
+                var rad = i * dRadian * 0.95 + dRadian * (rnd.NextDouble() * 0.05);
 
                 var x = midWidth + Math.Cos(rad) * radius * (rnd.NextDouble() * 0.05 + 0.95);
                 var y = midHeight + Math.Sin(rad) * radius * (rnd.NextDouble() * 0.05 + 0.95);
@@ -234,15 +280,27 @@ namespace KDTreeDemo
                 Ellipse ellipse = new() { Width = 10, Height = 10, Fill = NormalPointBrush };
                 Canvas.SetLeft(ellipse, point[0] - 5);
                 Canvas.SetTop(ellipse, point[1] - 5);
-                mainCanvas.Children.Add(ellipse);
+                Canvas_Main.Children.Add(ellipse);
                 _RandomPointElements.Add(ellipse);
             }
+        }
+
+        private void AddEmptyPoints()
+        {
+            _RandomPoints.AddRange(Enumerable.Repeat((double[])[0.0, 0.0], _RandomPointNumber));
         }
 
         //=======================
         // mainCanvas_MouseLeftButtonDown
 
+        private Point? _LastMouseButtonGetPosition;
         private void MainCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _LastMouseButtonGetPosition = Mouse.GetPosition(Canvas_Main);
+            FindNearest(_LastMouseButtonGetPosition.Value);
+        }
+
+        private void FindNearest(Point point)
         {
             Debug.Assert(_KDTree != null);
 
@@ -251,16 +309,22 @@ namespace KDTreeDemo
 
             ClearMouseLeftButtonDownElements();
 
-            var point = Mouse.GetPosition(mainCanvas);
-            var hitPoint = _KDTree.FindNearest([point.X, point.Y]);
+            KDTreeNode<double> nearestNode;
+            if (_AlgorithmType == 0)
+                nearestNode = _KDTree.FindNearestRecursion([point.X, point.Y]);
+            else
+                nearestNode = _KDTree.FindNearest([point.X, point.Y]);
 
-            Canvas.SetLeft(_NearestElement, hitPoint[0] - 5);
-            Canvas.SetTop(_NearestElement, hitPoint[1] - 5);
-            mainCanvas.Children.Add(_NearestElement);
+            Canvas.SetLeft(_NearestElement, nearestNode[0] - 5);
+            Canvas.SetTop(_NearestElement, nearestNode[1] - 5);
+            Canvas_Main.Children.Add(_NearestElement);
+            _NodeTreeItems[nearestNode].Fill = NearestBrush;
+            _ChangedNodeTreeItems.Add(nearestNode);
+
 
             Canvas.SetLeft(_MouseHitElement, point.X - 5);
             Canvas.SetTop(_MouseHitElement, point.Y - 5);
-            mainCanvas.Children.Add(_MouseHitElement);
+            Canvas_Main.Children.Add(_MouseHitElement);
 
             txtTraversePoints.Text = _TraverseCount.ToString();
             txtCheckedPoints.Text = _CheckedCount.ToString();
@@ -268,17 +332,19 @@ namespace KDTreeDemo
 
         private void ClearMouseLeftButtonDownElements()
         {
-            _TraverseElements.ForEach(e => mainCanvas.Children.Remove(e));
+            _TraverseElements.ForEach(e => Canvas_Main.Children.Remove(e));
             _TraverseElements.Clear();
             _TraversePoints.Clear();
             _TraverseCount = 0;
-            _CheckedElements.ForEach(e => mainCanvas.Children.Remove(e));
+            _CheckedElements.ForEach(e => Canvas_Main.Children.Remove(e));
             _CheckedElements.Clear();
             _CheckedPoints.Clear();
             _CheckedCount = 0;
-            _BranchCheckedElements.ForEach(e => mainCanvas.Children.Remove(e));
-            mainCanvas.Children.Remove(_NearestElement);
-            mainCanvas.Children.Remove(_MouseHitElement);
+            _BranchCheckedElements.ForEach(e => Canvas_Main.Children.Remove(e));
+            Canvas_Main.Children.Remove(_NearestElement);
+            Canvas_Main.Children.Remove(_MouseHitElement);
+
+            _ChangedNodeTreeItems.ToList().ForEach(node => _NodeTreeItems[node].Fill = NormalPointBrush);
         }
 
         private void DrawSplitLine(KDTreeNode<double>? node, Rect rect, double thickness, int typeBrush = 0)
@@ -302,7 +368,7 @@ namespace KDTreeDemo
                             Stroke = brush,
                             StrokeThickness = thickness
                         };
-                        mainCanvas.Children.Add(line);
+                        Canvas_Main.Children.Add(line);
                         _LineElements.Add(line);
 
                         DrawSplitLine(node.Left, rect with { Width = x - rect.X }, thickness - 0.5, typeBrush);
@@ -321,7 +387,7 @@ namespace KDTreeDemo
                             Stroke = brush,
                             StrokeThickness = thickness
                         };
-                        mainCanvas.Children.Add(line);
+                        Canvas_Main.Children.Add(line);
                         _LineElements.Add(line);
 
                         DrawSplitLine(node.Left, rect with { Height = y - rect.Y }, thickness - 0.5, typeBrush);
@@ -346,6 +412,24 @@ namespace KDTreeDemo
         private void RbtCircle_Click(object sender, RoutedEventArgs e)
         {
             _RandomPointGenerationType = 1;
+        }
+
+        int _AlgorithmType = 0;
+
+        private void RadioButton_Checked_T2B(object sender, RoutedEventArgs e)
+        {
+            _AlgorithmType = 0;
+            if (_LastMouseButtonGetPosition == null)
+                return;
+            FindNearest(_LastMouseButtonGetPosition.Value);
+        }
+
+        private void RadioButton_Checked_B2T(object sender, RoutedEventArgs e)
+        {
+            _AlgorithmType = 1;
+            if (_LastMouseButtonGetPosition == null)
+                return;
+            FindNearest(_LastMouseButtonGetPosition.Value);
         }
     }
 }

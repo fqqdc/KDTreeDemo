@@ -1,0 +1,84 @@
+﻿<Window x:Class="KDTreeDemo.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:KDTreeDemo"
+        xmlns:arrow="clr-namespace:WPFArrows.Arrows"
+        mc:Ignorable="d"
+        Title="KD树Demo" Height="1080" Width="1920">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition />
+        </Grid.RowDefinitions>
+        <Canvas x:Name="mainCanvas" Grid.Row="1" 
+            Background="Transparent"
+            MouseLeftButtonDown="MainCanvas_MouseLeftButtonDown">
+        </Canvas>
+        <Grid HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5">
+            <Grid.RowDefinitions>
+                <RowDefinition />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button Content="随机生成" Grid.Row="0"
+                    Padding="5" Canvas.Left="10" Canvas.Top="10" 
+                    Click="BtnPointGenerator_Click"/>
+            <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10 5">
+                    <Ellipse Width="10" Height="10" Fill="Black" Grid.Row="0"/>
+                    <TextBlock Text="生成点" Grid.Row="0" Grid.Column="1"/>
+                    <TextBlock><Run Text="(" /><Run x:Name="txtBuilderPoints" Text="0" /><Run Text=")" /></TextBlock>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10 5">
+                    <Ellipse Width="10" Height="10" Fill="Red" Grid.Row="1"/>
+                    <TextBlock Text="遍历点" Grid.Row="1" Grid.Column="1"/>
+                    <TextBlock><Run Text="(" /><Run x:Name="txtTraversePoints" Text="0" /><Run Text=")" /></TextBlock>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10 5">
+                    <Ellipse Width="10" Height="10" Fill="Orange" Grid.Row="2"/>
+                    <TextBlock Text="候选点" Grid.Row="2" Grid.Column="1"/>
+                    <TextBlock><Run Text="(" /><Run x:Name="txtCheckedPoints" Text="0" /><Run Text=")" /></TextBlock>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10 5">
+                    <Ellipse Width="10" Height="10" Fill="DarkGreen" Grid.Row="3"/>
+                    <TextBlock Text="最近点" Grid.Row="3" Grid.Column="1"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10 5">
+                    <Ellipse Width="10" Height="10" Fill="Blue" Grid.Row="4"/>
+                    <TextBlock Text="中心点" Grid.Row="4" Grid.Column="1"/>
+                </StackPanel>
+
+            </StackPanel>
+                
+            <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10 5">
+                    <TextBlock Text="生成点数量："/>
+                    <TextBox Text="100" x:Name="txtRndPointNumber" Width="30" HorizontalContentAlignment="Center" />
+                </StackPanel>                
+            </StackPanel>
+
+            <StackPanel Grid.Row="0" Grid.Column="3" Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10 5">
+                    <TextBlock Text="随机点分布："/>
+                    <RadioButton VerticalAlignment="Center" IsChecked="True" Checked="RbtRandom_Click">
+                        <TextBlock Text="平均分布" />
+                    </RadioButton>
+                    <RadioButton VerticalAlignment="Center" Checked="RbtCircle_Click">
+                        <TextBlock Text="圆周分布" />
+                    </RadioButton>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

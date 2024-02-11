@@ -3,9 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace KDTree
 {
@@ -33,25 +30,28 @@ namespace KDTree
         public KDTreeNode<T> Root { get; init; }
         private readonly int _AxisNumber;
 
-        public KDTreeNode<T> FindNearestRecursion(in T[] value)
+        /// <summary>
+        /// FindNearest方法的递归实现
+        /// </summary>
+        public KDTreeNode<T> FindNearestRecursion(in T[] targetValue)
         {
-            if (value.Length != _AxisNumber)
-                throw new ArgumentOutOfRangeException(nameof(value), $"Length of {nameof(value)} must equal {_AxisNumber}.");
+            if (targetValue.Length != _AxisNumber)
+                throw new ArgumentOutOfRangeException(nameof(targetValue), $"Length of {nameof(targetValue)} must equal {_AxisNumber}.");
 
             var bestDistance = double.MaxValue;
             KDTreeNode<T>? bestNode = null;
 
-            FindNearestRecursion(value, Root, ref bestDistance, ref bestNode);
+            FindNearestRecursion(targetValue, Root, ref bestDistance, ref bestNode);
 
             Debug.Assert(bestNode != null);
             return bestNode;
         }
 
-        private void FindNearestRecursion(in T[] center, in KDTreeNode<T> currentNode, ref double bestDistance, ref KDTreeNode<T>? bestNode)
+        private void FindNearestRecursion(in T[] targetValue, in KDTreeNode<T> currentNode, ref double bestDistance, ref KDTreeNode<T>? bestNode)
         {
             Debug.Assert(currentNode != null);
 
-            var distance = CalcDistanceSquare(center, currentNode.Value);
+            var distance = CalcDistanceSquare(targetValue, currentNode.Value);
             NodeVisited?.Invoke(currentNode);
 
             if (distance < bestDistance)
@@ -64,46 +64,49 @@ namespace KDTree
             KDTreeNode<T>? node0;
             KDTreeNode<T>? node1;
 
-            if (center[currentNode.Axis] < currentNode[currentNode.Axis])
+            if (targetValue[currentNode.Axis] < currentNode[currentNode.Axis])
             {
-                (node0, node1) = (currentNode.Left, currentNode.Right);
+                (node0, node1) = (currentNode.Left, currentNode.Right); // 先遍历左子树
             }
             else
             {
-                (node0, node1) = (currentNode.Right, currentNode.Left);
+                (node0, node1) = (currentNode.Right, currentNode.Left); // 先遍历右子树
             }
 
 
             if (node0 != null)
             {
-                FindNearestRecursion(center, currentNode: node0, ref bestDistance, ref bestNode);
+                FindNearestRecursion(targetValue, currentNode: node0, ref bestDistance, ref bestNode);
             }
 
             if (node1 != null)
             {
-                var axisDistance = KDTree<T>.CalcDistanceSquareByAxis(center, currentNode.Value, currentNode.Axis);
-
+                var axisDistance = KDTree<T>.CalcDistanceSquareByAxis(targetValue, currentNode.Value, currentNode.Axis);
+                //如果node1在currentNode.Axis轴上的距离小于当前最小距离，那么有可能在node1的子树上有更近的节点
                 if (axisDistance < bestDistance)
                 {
-                    SwitchedSiblingBranch?.Invoke(center, currentNode, bestDistance);
-                    FindNearestRecursion(center, node1, ref bestDistance, ref bestNode);
+                    SwitchedSiblingBranch?.Invoke(targetValue, currentNode, bestDistance);
+                    FindNearestRecursion(targetValue, node1, ref bestDistance, ref bestNode);
                 }
             }
         }
 
-        public KDTreeNode<T> FindNearest(in T[] value)
+        /// <summary>
+        /// 寻找离targetValue最近的节点
+        /// </summary>
+        public KDTreeNode<T> FindNearest(in T[] targetValue)
         {
-            if (value.Length != _AxisNumber)
-                throw new ArgumentOutOfRangeException(nameof(value), $"Length of {nameof(value)} must equal {_AxisNumber}.");
+            if (targetValue.Length != _AxisNumber)
+                throw new ArgumentOutOfRangeException(nameof(targetValue), $"Length of {nameof(targetValue)} must equal {_AxisNumber}.");
 
             var bestDistance = double.MaxValue;
             KDTreeNode<T>? bestNode = null;
             HashSet<KDTreeNode<T>> visited = [];
 
-            var node = KDTree<T>.FindLeafByAsix(Root, value);
+            var node = KDTree<T>.FindLeafByAsix(Root, targetValue);
             while (node != null)
             {
-                var distance = CalcDistanceSquare(value, node.Value);
+                var distance = CalcDistanceSquare(targetValue, node.Value);
                 visited.Add(node);
                 NodeVisited?.Invoke(node);
 
@@ -121,12 +124,13 @@ namespace KDTree
 
                 if (siblingNode != null && !visited.Contains(siblingNode))
                 {
-                    var axisDistance = KDTree<T>.CalcDistanceSquareByAxis(value, node.Parent.Value, node.Parent.Axis);
+                    var axisDistance = KDTree<T>.CalcDistanceSquareByAxis(targetValue, node.Parent.Value, node.Parent.Axis);
+                    //如果siblingNode在node.Parent.Axis轴上的距离小于当前最小距离，那么有可能在siblingNode的子树上有更近的节点
                     if (axisDistance < bestDistance)
                     {
                         Debug.Assert(bestNode != null);
-                        SwitchedSiblingBranch?.Invoke(value, node.Parent, bestDistance);
-                        node = KDTree<T>.FindLeafByAsix(siblingNode, value);
+                        SwitchedSiblingBranch?.Invoke(targetValue, node.Parent, bestDistance);
+                        node = KDTree<T>.FindLeafByAsix(siblingNode, targetValue);
                         continue;
                     }
                 }
@@ -139,7 +143,7 @@ namespace KDTree
         }
 
         /// <summary>
-        /// 寻找分支上的叶子，根据节点上的轴坐标来选择靠近目标的分支
+        /// 寻找分支上的叶子，根据node.Axis轴的坐标来选择靠近目标的分支
         /// </summary>
         private static KDTreeNode<T> FindLeafByAsix(in KDTreeNode<T> root, T[] values)
         {

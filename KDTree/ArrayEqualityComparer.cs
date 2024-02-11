@@ -1,4 +1,8 @@
-﻿namespace KDTree
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace KDTree
 {
     internal class ArrayEqualityComparer<T>() : IEqualityComparer<T[]>
         where T : IComparable<T>

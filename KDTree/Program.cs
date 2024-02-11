@@ -1,4 +1,7 @@
-﻿namespace KDTree
+﻿using System;
+using System.Collections.Generic;
+
+namespace KDTree
 {
     internal class Program
     {

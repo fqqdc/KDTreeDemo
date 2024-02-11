@@ -1,4 +1,7 @@
-﻿namespace KDTree
+﻿using System;
+using System.Collections.Generic;
+
+namespace KDTree
 {
     internal class ArrayIndexComparer<T>(int index) : IComparer<T[]>
         where T : IComparable<T>
